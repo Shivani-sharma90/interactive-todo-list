@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Interactive To-Do List</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;padding:24px 14px;font-family:Arial,sans-serif;background:linear-gradient(135deg,#eaf2ff,#f8faff);color:#17243a;display:flex;justify-content:center;align-items:flex-start}
+.app{width:100%;max-width:600px;margin-top:20px;padding:26px;background:#fff;border-radius:22px;box-shadow:0 12px 35px #163b7020}
+h1{margin:0 0 8px;font-size:28px}.subtitle{margin:0 0 22px;color:#65738a;line-height:1.5}
+.entry{display:flex;gap:8px}input[type=text]{min-width:0;flex:1;padding:13px 14px;border:1px solid #cbd5e1;border-radius:10px;font-size:16px;outline:none}
+input[type=text]:focus{border-color:#2463eb;box-shadow:0 0 0 3px #2463eb20}
+button{border:0;border-radius:10px;padding:11px 14px;cursor:pointer;font-size:14px;font-weight:700;background:#155eef;color:#fff}
+button:hover{filter:brightness(.95)}button:focus-visible{outline:3px solid #8bb4ff;outline-offset:2px}
+.stats{display:flex;justify-content:space-between;gap:10px;margin:20px 0 14px;color:#65738a;font-size:14px}
+.filters{display:flex;gap:7px;flex-wrap:wrap;margin-bottom:14px}.filters button{background:#edf2fa;color:#35445c}.filters button.active{background:#155eef;color:#fff}
+ul{list-style:none;margin:0;padding:0}li{display:flex;align-items:center;gap:10px;padding:12px;margin-top:9px;background:#f5f7fb;border:1px solid #e5eaf2;border-radius:12px}
+li span{flex:1;overflow-wrap:anywhere;line-height:1.4}li.done span{text-decoration:line-through;color:#8490a2}
+.toggle{width:20px;height:20px;flex:0 0 auto;accent-color:#155eef}
+.delete{background:#fff0f0;color:#c62828;padding:8px 10px}.clear{background:#eef2ff;color:#2548a6}
+.empty{text-align:center;color:#8490a2;padding:24px 8px}.bottom{display:flex;justify-content:flex-end;margin-top:12px}.footer{margin-top:18px;font-size:12px;color:#8490a2;text-align:center;line-height:1.5}
+@media(max-width:420px){.app{padding:20px 16px}h1{font-size:24px}.entry button{padding:12px 10px}li{gap:7px}}
+</style>
+</head>
+<body>
+<main class="app">
+  <h1>My To-Do List</h1>
+  <p class="subtitle">Plan your day, track your tasks, and save your progress automatically.</p>
+  <form class="entry" id="taskForm">
+    <input id="taskInput" type="text" placeholder="Enter a task..." aria-label="New task" maxlength="160" autocomplete="off">
+    <button type="submit">Add Task</button>
+  </form>
+  <div class="stats"><span id="remainingCount">0 tasks left</span><span id="completedCount">0 completed</span></div>
+  <div class="filters" aria-label="Filter tasks">
+    <button type="button" data-filter="all" class="active">All</button>
+    <button type="button" data-filter="active">Active</button>
+    <button type="button" data-filter="done">Done</button>
+  </div>
+  <ul id="taskList"></ul>
+  <p class="empty" id="emptyMessage">No tasks yet. Add your first task above!</p>
+  <div class="bottom"><button type="button" class="clear" id="clearCompleted">Clear completed</button></div>
+  <p class="footer">Tasks are saved in this browser using LocalStorage. Refresh the page to test persistence.</p>
+</main>
+<script>
+const STORAGE_KEY = "interactive_todo_tasks_v2";
+const form = document.getElementById("taskForm");
+const input = document.getElementById("taskInput");
+const list = document.getElementById("taskList");
+const emptyMessage = document.getElementById("emptyMessage");
+const remainingCount = document.getElementById("remainingCount");
+const completedCount = document.getElementById("completedCount");
+const clearCompletedButton = document.getElementById("clearCompleted");
+const filterButtons = document.querySelectorAll("[data-filter]");
+let activeFilter = "all";
+
+function loadTasks() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(STORAGE_KEY) || "[]");
+    return Array.isArray(parsed) ? parsed.filter(t => t && typeof t.text === "string") : [];
+  } catch (error) {
+    return [];
+  }
+}
+let tasks = loadTasks();
+
+function saveTasks() {
+  try {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(tasks));
+  } catch (error) {
+    alert("Your browser could not save tasks. Please check browser storage settings.");
+  }
+}
+
+function renderTasks() {
+  list.replaceChildren();
+  const visibleTasks = tasks.filter(task => {
+    if (activeFilter === "active") return !task.done;
+    if (activeFilter === "done") return task.done;
+    return true;
+  });
+  emptyMessage.hidden = visibleTasks.length > 0;
+  emptyMessage.textContent = tasks.length === 0 ? "No tasks yet. Add your first task above!" : "No tasks match this filter.";
+
+  visibleTasks.forEach(task => {
+    const item = document.createElement("li");
+    if (task.done) item.classList.add("done");
+    item.dataset.id = String(task.id);
+
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.className = "toggle";
+    checkbox.checked = task.done;
+    checkbox.setAttribute("aria-label", "Mark task complete");
+    checkbox.addEventListener("change", () => {
+      task.done = checkbox.checked;
+      saveTasks();
+      renderTasks();
+    });
+
+    const text = document.createElement("span");
+    text.textContent = task.text;
+
+    const deleteButton = document.createElement("button");
+    deleteButton.type = "button";
+    deleteButton.className = "delete";
+    deleteButton.textContent = "Delete";
+    deleteButton.addEventListener("click", () => {
+      tasks = tasks.filter(t => t.id !== task.id);
+      saveTasks();
+      renderTasks();
+    });
+
+    item.append(checkbox, text, deleteButton);
+    list.appendChild(item);
+  });
+
+  const left = tasks.filter(task => !task.done).length;
+  const done = tasks.length - left;
+  remainingCount.textContent = `${left} ${left === 1 ? "task" : "tasks"} left`;
+  completedCount.textContent = `${done} completed`;
+  clearCompletedButton.disabled = done === 0;
+  clearCompletedButton.style.opacity = done === 0 ? ".55" : "1";
+  filterButtons.forEach(button => {
+    const selected = button.dataset.filter === activeFilter;
+    button.classList.toggle("active", selected);
+    button.setAttribute("aria-pressed", String(selected));
+  });
+}
+
+form.addEventListener("submit", event => {
+  event.preventDefault();
+  const text = input.value.trim();
+  if (!text) { input.focus(); return; }
+  tasks.push({ id: Date.now() + Math.random(), text, done: false });
+  saveTasks();
+  activeFilter = "all";
+  renderTasks();
+  input.value = "";
+  input.focus();
+});
+
+filterButtons.forEach(button => {
+  button.addEventListener("click", () => {
+    activeFilter = button.dataset.filter;
+    renderTasks();
+  });
+});
+
+clearCompletedButton.addEventListener("click", () => {
+  tasks = tasks.filter(task => !task.done);
+  saveTasks();
+  renderTasks();
+});
+
+renderTasks();
+</script>
+</body>
+</html>
